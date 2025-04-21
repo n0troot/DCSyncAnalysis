@@ -29,7 +29,7 @@ pip install pandas openpyxl
 ## Usage
 
 ```bash
-python DCSyncAnalysis.py <hashes_file> <cracked_file> <output_file>
+python DCSyncAnalysis.py <hashes_file> <cracked_file> <output_file> <company_name>
 ```
 
 ### Parameters
@@ -41,7 +41,7 @@ python DCSyncAnalysis.py <hashes_file> <cracked_file> <output_file>
 ## Example
 
 ```bash
-python DCSyncAnalysis.py domain_hashes.txt cracked_passwords.txt password_analysis.xlsx
+python DCSyncAnalysis.py domain_hashes.txt cracked_passwords.txt password_analysis.xlsx COMAPANY_NAME
 ```
 
 ## Output
