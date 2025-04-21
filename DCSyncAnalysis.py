@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 import sys
 import re
 
-def analyze_passwords(hashes_file, cracked_file, output_file):
+def analyze_passwords(hashes_file, cracked_file, output_file, company_keyword):
     # Read cracked passwords into hash->password mapping
     cracked = {}
     with open(cracked_file, 'r', encoding='utf-8') as f:
@@ -20,13 +20,55 @@ def analyze_passwords(hashes_file, cracked_file, output_file):
 
     # Read NTLM hashes from the dump file
     hash_usage = Counter()
-    with open(hashes_file, 'r', encoding='utf-8') as f:
-        for line in f:
-            # Format is: domain\username:rid:lmhash:ntlmhash:::
-            parts = line.strip().split(':')
-            if len(parts) >= 4:  # Make sure we have enough fields
+    format_detected = False
+    
+    # Debug: Check first few lines of hash file
+    print(f"Reading hash file: {hashes_file}")
+    with open(hashes_file, 'r', encoding='utf-8', errors='ignore') as f:
+        first_lines = [f.readline().strip() for _ in range(5)]
+        print(f"First few lines of hash file:")
+        for i, line in enumerate(first_lines):
+            print(f"Line {i+1}: {line}")
+    
+    with open(hashes_file, 'r', encoding='utf-8', errors='ignore') as f:
+        for i, line in enumerate(f):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+                
+            # Try multiple formats
+            
+            # Format 1: domain\username:rid:lmhash:ntlmhash:::
+            if ':' in line and len(line.split(':')) >= 4:
+                parts = line.split(':')
                 ntlm_hash = parts[3].lower()  # 4th field is NTLM hash
+                if ntlm_hash and ntlm_hash != 'aad3b435b51404eeaad3b435b51404ee':  # Skip empty hashes
+                    hash_usage[ntlm_hash] += 1
+                    if not format_detected:
+                        print(f"Detected format: domain\\username:rid:lmhash:ntlmhash:::")
+                        format_detected = True
+            
+            # Format 2: just the hash
+            elif len(line.strip()) == 32:
+                ntlm_hash = line.lower()
                 hash_usage[ntlm_hash] += 1
+                if not format_detected:
+                    print(f"Detected format: hash only (32 characters)")
+                    format_detected = True
+            
+            # Format 3: username:hash format
+            elif ':' in line and len(line.split(':')) == 2:
+                _, ntlm_hash = line.split(':')
+                ntlm_hash = ntlm_hash.lower()
+                if len(ntlm_hash) == 32:
+                    hash_usage[ntlm_hash] += 1
+                    if not format_detected:
+                        print(f"Detected format: username:hash")
+                        format_detected = True
+                    
+            # Add debugging for difficult lines
+            if i < 10 and not hash_usage and line:
+                print(f"Debug - Line {i+1} not recognized: {line}")
 
     # Calculate password statistics
     password_usage = defaultdict(int)
@@ -204,11 +246,10 @@ def analyze_passwords(hashes_file, cracked_file, output_file):
     # Extract words (3+ letter sequences) from passwords
     words = Counter()
     company_count = 0
-    company_keyword = sys.argv[4]
     
     for pwd, count in password_usage.items():
         # Look for the company name specifically
-        if company_keyword in pwd.lower():
+        if company_keyword.lower() in pwd.lower():
             company_count += count
         
         # Extract other words (3+ letters)
@@ -217,7 +258,7 @@ def analyze_passwords(hashes_file, cracked_file, output_file):
             words[match.lower()] += count
 
     # Add the company keyword separately (it might be overcounted, but we want to highlight it)
-    words[company_keyword] = company_count
+    words[company_keyword.lower()] = company_count
 
     patterns['A9'] = "Common Words in Passwords"
     patterns['A9'].font = header_font
@@ -320,8 +361,8 @@ def analyze_passwords(hashes_file, cracked_file, output_file):
     print(f"\nReport saved to: {output_file}")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python script.py hashes_file cracked_file output_file")
+    if len(sys.argv) != 5:
+        print("Usage: python script.py hashes_file cracked_file output_file company_keyword")
         sys.exit(1)
     
     analyze_passwords(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
